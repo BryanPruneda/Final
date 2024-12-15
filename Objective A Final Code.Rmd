@@ -1,0 +1,121 @@
+---
+title: "Objective 1"
+author: "Bryan Pruneda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r objective A}
+library(caret)
+library(randomForest)
+library(Metrics)
+library(xgboost)
+# Bring in the Datasets
+train_data <- read.csv("C:/Users/prune/OneDrive/Desktop/Stats Class/Wine Train.csv")
+test_data <- read.csv("C:/Users/prune/OneDrive/Desktop/Stats Class/Wine Test Set.csv")
+
+#Break Down the Quality and ID from the training set to port over to the test ste
+X_train <- train_data[, -which(names(train_data) == "quality" | names(train_data) == "ID")]
+y_train <- train_data$quality
+
+X_test <- test_data[, -which(names(test_data) == "ID")]
+
+#Standardize the data
+X_train_scaled <- scale(X_train)
+X_test_scaled <- scale(X_test, center = attr(X_train_scaled, "scaled:center"), scale = attr(X_train_scaled, "scaled:scale"))
+
+# Create the Linear MOdel with its variables
+lm_model <- lm(y_train ~ pH * volatile.acidity + residual.sugar + citric.acid * free.sulfur.dioxide, data = as.data.frame(X_train_scaled))
+
+# Use model to predict test set
+y_pred_lm <- predict(lm_model, newdata = as.data.frame(X_test_scaled))
+
+# Write out file
+output_lm <- data.frame(ID = test_data$ID, quality = y_pred_lm)
+write.csv(output_lm, "C:/Users/prune/OneDrive/Desktop/Stats Class/MLR Wine Quality.csv", row.names = FALSE)
+
+#Quick Check
+head(output_lm)
+
+# Checking model against training set
+y_test <- train_data$quality
+# Get the MAE
+mae_value <- mae(y_test, y_pred_lm)
+# Check the MAE
+print(paste("Mean Absolute Error:", mae_value))
+
+
+# Train Random Forest on Training Set
+rf_model <- randomForest(x = X_train_scaled, y = y_train, ntree = 100, mtry = 3, importance = TRUE)
+
+# Use model to predict the Test Set
+y_pred_rf <- predict(rf_model, newdata = X_test_scaled)
+
+# put the ids form test set with predicted model
+test_ids <- test_data$ID
+
+# make the data frame for random forest to combine quality and their id
+output_rf <- data.frame(ID = test_ids, quality = y_pred_rf)
+
+#Write out file
+write.csv(output_rf, "C:/Users/prune/OneDrive/Desktop/Stats Class/Random Forest Wine Quality.csv", row.names = FALSE)
+
+#quick check
+head(output_rf)
+
+# Get the mae mse and rsme
+mae_rf <- mae(output_rf$quality, y_pred_rf)
+mse_rf <- mse(output_rf$quality, y_pred_rf)
+rmse_rf <- rmse(output_rf$quality, y_pred_rf)
+
+# create the amount of featuers a tree can have
+tune_grid_rf <- expand.grid(mtry = c(1, 2, 3, 4, 5))
+
+# Random forest model with cross validation
+rf_tune <- train(
+  x = X_train_scaled, 
+  y = y_train, 
+  method = "rf", 
+  trControl = trainControl(method = "cv", number = 5),
+  tuneGrid = tune_grid_rf
+)
+
+# Check out the model
+print(rf_tune)
+
+# Find the best model from the bunch
+best_rf_model <- rf_tune$finalModel
+y_pred_rf_tuned <- predict(best_rf_model, newdata = X_test_scaled)
+best_rf_model
+
+# Find the important repeated variables
+rf_importance <- importance(rf_model)
+print(rf_importance)
+
+# plot the important variables
+varImpPlot(rf_model)
+
+
+# standardize the datasets to impose the model to find the mae
+X_train_scaled <- scale(X_train)
+X_test_scaled <- scale(X_test, center = attr(X_train_scaled, "scaled:center"), scale = attr(X_train_scaled, "scaled:scale"))
+
+rf_model <- randomForest(x = X_train_scaled, y = y_train, ntree = 100, mtry = 3, importance = TRUE)
+
+y_pred_rf <- predict(rf_model, newdata = X_test_scaled)
+
+mae_rf_tuned <- mae(output_rf$quality, y_pred_rf)
+cat("MAE for the tuned Random Forest model:", mae_rf_tuned, "\n")
+
+```
+
